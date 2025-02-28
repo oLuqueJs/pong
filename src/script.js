@@ -1,62 +1,141 @@
-let CIR_X = 300
-let CIR_Y = 300
-let CIR_D = 14
+// Game settings
+const PADDLE_SPEED = 5
+const AI_SPEED = 3
+const INITIAL_BALL_SPEED = 4
+const MAX_BALL_SPEED = 8
+const MIN_BALL_SPEED = 3
+const PADDLE_WIDTH = 10
+const PADDLE_HEIGHT = 80
+const BALL_SIZE = 14
+const ANGLE_INFLUENCE = 0.15
 
-let RECT_X_LEFT = 30
-let RECT_Y_LEFT = 250
-let RECT_W = 10
-let RECT_H = 80
+// Game state
+let ball = {
+  x: 300,
+  y: 300,
+  dx: INITIAL_BALL_SPEED,
+  dy: 0,
+  speed: INITIAL_BALL_SPEED
+}
 
-let RECT_X_RIGHT = 560
-let RECT_Y_RIGHT = 250
+let leftPaddle = {
+  x: 30,
+  y: 250
+}
 
-let CIR_AXIS_X = 3
-let CIR_AXIS_Y = 3
+let rightPaddle = {
+  x: 560,
+  y: 250
+}
+
+let scores = {
+  player: 0,
+  ai: 0
+}
 
 function setup() {
   createCanvas(600, 600)
-  background(0)
+  textAlign(CENTER, CENTER)
+  textSize(32)
+}
+
+function resetBall() {
+  ball.x = width / 2
+  ball.y = height / 2
+  ball.speed = INITIAL_BALL_SPEED
+  const angle = (Math.random() * Math.PI/4) - Math.PI/8 // Random angle between -22.5 and 22.5 degrees
+  ball.dx = (Math.random() > 0.5 ? 1 : -1) * ball.speed * Math.cos(angle)
+  ball.dy = ball.speed * Math.sin(angle)
+}
+
+function constrainBallSpeed() {
+  const currentSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy)
+  if (currentSpeed > MAX_BALL_SPEED) {
+    const scale = MAX_BALL_SPEED / currentSpeed
+    ball.dx *= scale
+    ball.dy *= scale
+  } else if (currentSpeed < MIN_BALL_SPEED) {
+    const scale = MIN_BALL_SPEED / currentSpeed
+    ball.dx *= scale
+    ball.dy *= scale
+  }
+  ball.speed = currentSpeed
 }
 
 function draw() {
+  // Clear background
   background(0)
-  circle(CIR_X, CIR_Y, CIR_D)
-
-  let CIR_R = CIR_X + CIR_D / 2;
-
-  if (CIR_R >= width || CIR_X - CIR_D / 2 <= 0) {
-    CIR_AXIS_X = -CIR_AXIS_X;
+  
+  // Draw scores
+  fill(255)
+  text(scores.player, width / 4, 50)
+  text(scores.ai, 3 * width / 4, 50)
+  
+  // Draw ball
+  circle(ball.x, ball.y, BALL_SIZE)
+  
+  // Ball movement and collision with top/bottom
+  ball.x += ball.dx
+  ball.y += ball.dy
+  
+  if (ball.y - BALL_SIZE/2 <= 0 || ball.y + BALL_SIZE/2 >= height) {
+    ball.dy = -ball.dy
+    constrainBallSpeed()
   }
-
-  if (CIR_Y - CIR_D / 2 <= 0 || CIR_Y + CIR_D / 2 >= height) {
-    CIR_AXIS_Y = -CIR_AXIS_Y;
+  
+  // Score points and reset ball
+  if (ball.x + BALL_SIZE/2 >= width) {
+    scores.player++
+    resetBall()
+  } else if (ball.x - BALL_SIZE/2 <= 0) {
+    scores.ai++
+    resetBall()
   }
-
-  CIR_X += CIR_AXIS_X;
-  CIR_Y += CIR_AXIS_Y;
-
-  if (keyIsDown(87) && RECT_Y_LEFT > 0) { 
-    RECT_Y_LEFT -= 5;
+  
+  // Player paddle movement
+  if (keyIsDown(87) && leftPaddle.y > 0) { // W key
+    leftPaddle.y -= PADDLE_SPEED
   }
-
-  if (keyIsDown(83) && RECT_Y_LEFT < height - RECT_H) { 
-    RECT_Y_LEFT += 5;
+  if (keyIsDown(83) && leftPaddle.y < height - PADDLE_HEIGHT) { // S key
+    leftPaddle.y += PADDLE_SPEED
   }
-
-  if (RECT_Y_RIGHT + RECT_H / 2 < CIR_Y) {
-    RECT_Y_RIGHT += 3;
-  } else if (RECT_Y_RIGHT + RECT_H / 2 > CIR_Y) {
-    RECT_Y_RIGHT -= 3;
+  
+  // AI paddle movement
+  const paddleCenter = rightPaddle.y + PADDLE_HEIGHT/2
+  if (paddleCenter < ball.y) {
+    rightPaddle.y = min(rightPaddle.y + AI_SPEED, height - PADDLE_HEIGHT)
+  } else if (paddleCenter > ball.y) {
+    rightPaddle.y = max(rightPaddle.y - AI_SPEED, 0)
   }
-
-  rect(RECT_X_LEFT, RECT_Y_LEFT, RECT_W, RECT_H);
-  rect(RECT_X_RIGHT, RECT_Y_RIGHT, RECT_W, RECT_H);
-
-  if (CIR_X - CIR_D / 2 <= RECT_X_LEFT + RECT_W && CIR_Y > RECT_Y_LEFT && CIR_Y < RECT_Y_LEFT + RECT_H) {
-    CIR_AXIS_X = -CIR_AXIS_X;
+  
+  // Draw paddles
+  rect(leftPaddle.x, leftPaddle.y, PADDLE_WIDTH, PADDLE_HEIGHT)
+  rect(rightPaddle.x, rightPaddle.y, PADDLE_WIDTH, PADDLE_HEIGHT)
+  
+  // Paddle collision detection
+  if (ball.x - BALL_SIZE/2 <= leftPaddle.x + PADDLE_WIDTH && 
+      ball.y >= leftPaddle.y && 
+      ball.y <= leftPaddle.y + PADDLE_HEIGHT &&
+      ball.dx < 0) {
+    ball.dx = -ball.dx
+    const relativeIntersectY = (leftPaddle.y + PADDLE_HEIGHT/2) - ball.y
+    const normalizedIntersect = relativeIntersectY / (PADDLE_HEIGHT/2)
+    const angle = normalizedIntersect * Math.PI/3 // Max 60 degree angle
+    ball.dy = -ball.speed * Math.sin(angle)
+    ball.dx = Math.abs(ball.speed * Math.cos(angle)) // Ensure it moves right
+    constrainBallSpeed()
   }
-
-  if (CIR_X + CIR_D / 2 >= RECT_X_RIGHT && CIR_Y > RECT_Y_RIGHT && CIR_Y < RECT_Y_RIGHT + RECT_H) {
-    CIR_AXIS_X = -CIR_AXIS_X;
+  
+  if (ball.x + BALL_SIZE/2 >= rightPaddle.x && 
+      ball.y >= rightPaddle.y && 
+      ball.y <= rightPaddle.y + PADDLE_HEIGHT &&
+      ball.dx > 0) {
+    ball.dx = -ball.dx
+    const relativeIntersectY = (rightPaddle.y + PADDLE_HEIGHT/2) - ball.y
+    const normalizedIntersect = relativeIntersectY / (PADDLE_HEIGHT/2)
+    const angle = normalizedIntersect * Math.PI/3 // Max 60 degree angle
+    ball.dy = -ball.speed * Math.sin(angle)
+    ball.dx = -Math.abs(ball.speed * Math.cos(angle)) // Ensure it moves left
+    constrainBallSpeed()
   }
 }
